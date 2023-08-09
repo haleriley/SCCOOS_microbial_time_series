@@ -7,7 +7,7 @@ library(ranger)
 library(lubridate)
 
 
-setwd('C://Users/haler/Documents/PhD-Bowman/MIMS-miniDOT_O2-Ar_Study/16S_sccoos/')
+setwd('C://Users/haler/Documents/PhD-Bowman/SCCOOS_microbial_time_series/R_Data/')
 
 col1.aou <- "#648fff"
 col2.o2bio <- "#dc267f"
@@ -18,26 +18,10 @@ col5.other <- "#ffb000"
 
 set.seed(1234)
 
-#### load asvs and save ####
-
-# asv18S <- read.csv('updated_files/20230503_sccoos.eukarya.unique_tally.csv', header = T, row.names = 1)
-# asv16S.bac <- read.csv('updated_files/20230503_sccoos.bacteria.unique_tally.csv', header = T, row.names = 1)
-# asv16S.arc <- read.csv('updated_files/20230503_sccoos.archaea.unique_tally.csv', header = T, row.names = 1)
-# 
-# 
-# map.bac <- read.csv("updated_files/20230503_sccoos.bacteria.seq_edge_map.csv")
-# map.arc <- read.csv("updated_files/20230503_sccoos.archaea.seq_edge_map.csv")
-# map.euk <- read.csv("updated_files/20230503_sccoos.eukarya.seq_edge_map.csv")
-# 
-# taxa.bac <- read.csv("updated_files/20230503_sccoos.bacteria.taxon_map.csv")
-# taxa.arc <- read.csv("updated_files/20230503_sccoos.archaea.taxon_map.csv")
-# taxa.euk <- read.csv("updated_files/20230503_sccoos.eukarya.taxon_map.csv")
-# 
-# save(list = c('asv18S', 'asv16S.bac', 'asv16S.arc', 'map.bac', 'map.arc', 'map.euk', 'taxa.bac', 'taxa.arc', 'taxa.euk'), file = '20230511_sccoos_asv.Rdata')
 
 ## alternatively load existing Rdata file
 
-load('20230511_sccoos_asv.Rdata')
+load('20230808_sccoos_asv.Rdata')
 
 
 # # ---- pull out samples that need to be redone ----
