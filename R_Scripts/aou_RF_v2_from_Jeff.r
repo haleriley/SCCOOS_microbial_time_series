@@ -23,74 +23,78 @@ set.seed(1234)
 # ---- load SCCOOS microbial community data ----
 
 asv.train <- readRDS(file = "2023-08-09_sccoos_com_df_rclr_cleaned.rds")
+asv.dates <- readRDS(file = "2023-08-08_sccoos_community_time_series_dates.rds")
 
+# ---- load aou data ----
 
-#### load aou data ####
+o2 <- readRDS('../../O2-Ar_time_series/R_Data/2023-08-08_aop_cor_df.rds')
+# o2.days <- as.character(strptime(o2$Date, format = "%Y-%m-%d"))
+# aou.daily.mean <- tapply(o2[,'aou'], INDEX = o2.days, FUN = mean)
+# aou.corrected.daily.mean <- tapply(o2[,'aou.corrected'], INDEX = o2.days, FUN = mean)
+# 
+# names(aou.daily.mean) <- unique(o2.days)
+# names(aou.corrected.daily.mean) <- unique(o2.days)
+# 
+# o2.daily.state <- rep(NA, length(aou.daily.mean))
+# o2.daily.state[which(aou.daily.mean >= 0)] <- 'A'
+# o2.daily.state[which(aou.daily.mean < 0)] <- 'H'
+# names(o2.daily.state) <- unique(o2.days)
 
-o2 <- read.csv('2023-04-28_corrected_aou.csv', header = T, row.names = 1)
-o2.days <- as.character(strptime(o2$Date.Time, format = "%Y-%m-%d"))
-aou.daily.mean <- tapply(o2[,'aou'], INDEX = o2.days, FUN = mean)
-aou.corrected.daily.mean <- tapply(o2[,'aou.corrected'], INDEX = o2.days, FUN = mean)
+aop.df <- o2
+aop.df$Date <- parse_date_time(paste(year(aop.df$Date.Time), month(aop.df$Date.Time), day(aop.df$Date.Time), sep = "-"), orders = "Ymd")
+aop.df$Date.Time <- NULL
 
-names(aou.daily.mean) <- unique(o2.days)
-names(aou.corrected.daily.mean) <- unique(o2.days)
+aop.df <- aop.df %>% group_by(Date) %>% summarize_all(.funs = mean)
 
-o2.daily.state <- rep(NA, length(aou.daily.mean))
-o2.daily.state[which(aou.daily.mean >= 0)] <- 'A'
-o2.daily.state[which(aou.daily.mean < 0)] <- 'H'
-names(o2.daily.state) <- unique(o2.days)
+# ---- define training data ----
 
-#### define training data ####
+asv.dates <- parse_date_time(asv.dates, orders = "Ymd")
 
 train <- asv.train
-train['aou'] <- aou.daily.mean[as.character(asv.dates)]
-train['aou.corrected'] <- aou.corrected.daily.mean[as.character(asv.dates)]
-train$state <- as.factor(o2.daily.state[as.character(asv.dates)])
-train <- na.omit(train)
+train$Date <- asv.dates
+train <- merge(train, aop.df, by = "Date")
 
-# saveRDS(train, "2023-05-12_ASV_abundance_data_and_AOU_AOU_cor.rds")
+saveRDS(train, "2023-08-08_ASV_abundance_data_and_AOP_cor.rds")
 
 train.train.i <- sample(1:dim(train)[1], ceiling(0.7 * dim(train)[1]))
 train.train <- train[train.train.i,]
 train.test <- train[-train.train.i,]
 
-#### rf ####
+# ---- create random forest model ----
 
 library(ranger)
 
-response <- 'aou'
-# response <- 'aou.corrected'
+## toggle aop or aop.corrected depending on which you want to run
+response <- 'aop'
+# response <- 'aop.corrected'
 
-#predictors <- colnames(asv16S.train)
-predictors <- colnames(asv.train)
+predictors <- colnames(asv.train) # set predictors to asv global edge number
 
-# ---- aou model ----
+# ---- aou prediction model ----
+
 m1 <- ranger(as.formula(paste(response, '.', sep = '~')),
              data = train.train[,c(response, predictors)])
 
+sqrt(mean((m1$predictions - train.train$aop.corrected)^2))
 sqrt(m1$prediction.error)
 
 plot(m1$predictions ~ train.train[,response])
 
-#length(which(m1$predictions == train.train$state)) / length(train.train$state)
+aop.predict <- predict(m1, train.test) # predict full aop time series
 
-aou.predict <- predict(m1, train.test)
-plot(aou.predict$predictions ~ train.test[,response],
+plot(aop.predict$predictions ~ train.test[,response],
      ylab = 'Observed',
      xlab = 'Predicted')
 
-m1.lm <- lm(aou.predict$predictions ~ train.test[,response])
+m1.lm <- lm(aop.predict$predictions ~ train.test[,response])
 abline(0, 1, lty = 2)
 #abline(m1.lm)
 summary(m1.lm)
 
-length(which(aou.predict$predictions == train.test$state)) / length(train.test$state)
-length(which(sample(aou.predict$predictions) == train.test$state)) / length(train.test$state)
-
-saveRDS(m1, "2023-05-12_aou_RF_model_noOpt.rds")
+saveRDS(m1, "2023-08-08_aop_RF_model_noOpt.rds")
 
 
-#### parameter optimization ####
+# ---- parameter optimization ----
 
 ## define the parameter space
 
@@ -150,82 +154,63 @@ m2 <- ranger(
   oob.error = T
 )
 
-saveRDS(m2, "2023-05-12_aou_RF_model.rds")
+saveRDS(m2, "2023-08-08_aop_RF_model.rds")
 
-# pdf('internal_validation.pdf',
-#     height = 6,
-#     width = 6)
-# 
-# plot(m2$predictions ~ train.train$aou,
-#      ylab = 'Predicted',
-#      xlab = 'Observed')
-# 
-# abline(lm(m2$predictions ~ train.train$aou))
-# abline(0, 1, lty = 2)
-# 
-# dev.off()
-# 
-# pdf('external_validation.pdf',
-#     height = 6,
-#     width = 6)
 
-aou.predict <- predict(m1, train.test)
-aou.predict <- predict(m2, train.test)
+aop.predict <- predict(m1, train.test)
+aop.predict <- predict(m2, train.test)
 
-plot(aou.predict$predictions ~ train.test[,response],
+plot(aop.predict$predictions ~ train.test[,response],
      ylab = 'Predicted',
      xlab = 'Observed')
 abline(0, 1, lty = 2)
-abline(lm(aou.predict$predictions ~ train.test[,response]))
-summary(lm(aou.predict$predictions ~ train.test[,response]))
+abline(lm(aop.predict$predictions ~ train.test[,response]))
+summary(lm(aop.predict$predictions ~ train.test[,response]))
 
-
-
-# dev.off()
 
 # ---- RMSE calcs ----
 
-aou.model <- readRDS("2023-05-12_aou_RF_model.rds")
-aou.cor.model <- readRDS("2023-05-12_aou_cor_RF_model.rds")
-aou.model.noOpt <- readRDS("2023-05-12_aou_RF_model_noOpt.rds")
-aou.cor.model.noOpt <- readRDS("2023-05-12_aou_cor_RF_model_noOpt.rds")
+aop.model <- readRDS("2023-08-08_aop_RF_model.rds")
+aop.cor.model <- readRDS("2023-08-08_aop_cor_RF_model.rds")
+aop.model.noOpt <- readRDS("2023-08-08_aop_RF_model_noOpt.rds")
+aop.cor.model.noOpt <- readRDS("2023-08-08_aop_cor_RF_model_noOpt.rds")
 
-aou.predict1 <- predict(aou.model.noOpt, train.test)
-aou.predict2 <- predict(aou.model, train.test)
-aou.cor.predict1 <- predict(aou.cor.model.noOpt, train.test)
-aou.cor.predict2 <- predict(aou.cor.model, train.test)
+aop.predict1 <- predict(aop.model.noOpt, train.test)
+aop.predict2 <- predict(aop.model, train.test)
+aop.cor.predict1 <- predict(aop.cor.model.noOpt, train.test)
+aop.cor.predict2 <- predict(aop.cor.model, train.test)
 
-response <- 'aou'
-summary(lm(aou.predict1$predictions ~ train.test[,response]))
-summary(lm(aou.predict2$predictions ~ train.test[,response]))
-sqrt(mean((aou.predict1$predictions - train.test[,response])^2))
-sqrt(mean((aou.predict2$predictions - train.test[,response])^2))
+response <- 'aop'
+summary(lm(aop.predict1$predictions ~ train.test[,response]))
+summary(lm(aop.predict2$predictions ~ train.test[,response]))
+sqrt(mean((aop.predict1$predictions - train.test[,response])^2))
+sqrt(mean((aop.predict2$predictions - train.test[,response])^2))
 
-response <- 'aou.corrected'
-summary(lm(aou.cor.predict1$predictions ~ train.test[,response]))
-summary(lm(aou.cor.predict2$predictions ~ train.test[,response]))
-sqrt(mean((aou.cor.predict1$predictions - train.test[,response])^2))
-sqrt(mean((aou.cor.predict2$predictions - train.test[,response])^2))
+response <- 'aop.corrected'
+summary(lm(aop.cor.predict1$predictions ~ train.test[,response]))
+summary(lm(aop.cor.predict2$predictions ~ train.test[,response]))
+sqrt(mean((aop.cor.predict1$predictions - train.test[,response])^2))
+sqrt(mean((aop.cor.predict2$predictions - train.test[,response])^2))
 
 ggplot() +
-  geom_point(aes(x = train.test[,"aou"], y = aou.predict2$predictions), color = "black") +
-  geom_point(aes(x = train.test[,"aou.corrected"], y = aou.cor.predict2$predictions), color = col4.aoupred) +
+  geom_point(aes(x = train.test[,"aop"], y = aop.predict2$predictions), color = "black") +
+  geom_point(aes(x = train.test[,"aop.corrected"], y = aop.cor.predict2$predictions), color = col4.aoupred) +
   geom_abline(slope = 1, intercept = 0, color = col5.other, size = 1) +
-  geom_smooth(aes(x = train.test[,"aou"], y = aou.predict2$predictions), method = "lm", se = FALSE, color = "black") +
-  geom_smooth(aes(x = train.test[,"aou.corrected"], y = aou.cor.predict2$predictions), method = "lm", se = FALSE, color = col4.aoupred) +
+  geom_smooth(aes(x = train.test[,"aop"], y = aop.predict2$predictions), method = "lm", se = FALSE, color = "black") +
+  geom_smooth(aes(x = train.test[,"aop.corrected"], y = aop.cor.predict2$predictions), method = "lm", se = FALSE, color = col4.aoupred) +
   labs(x = "Observed", y = "Predicted") +
   theme_bw()
   
 
-aou.cor.predict2.full <- predict(aou.cor.model, train)
-summary(lm(aou.cor.predict2.full$predictions ~ train[,response]))
-sqrt(mean((aou.cor.predict2.full$predictions - train[,response])^2))
+aop.cor.predict2.full <- predict(aop.cor.model, train)
+summary(lm(aop.cor.predict2.full$predictions ~ train[,response]))
+sqrt(mean((aop.cor.predict2.full$predictions - train[,response])^2))
 
 
 ggplot() +
-  geom_point(aes(x = train[,"aou.corrected"], y = aou.cor.predict2.full$predictions), color = "blue") +
+  geom_point(aes(x = train[,"aop.corrected"], y = aop.cor.predict2.full$predictions), color = "blue") +
   geom_abline(slope = 1, intercept = 0, color = "red", size = 1) +
-  geom_smooth(aes(x = train[,"aou.corrected"], y = aou.cor.predict2.full$predictions), method = "lm", se = FALSE, color = "blue") +
+  geom_smooth(aes(x = train[,"aop.corrected"], y = aop.cor.predict2.full$predictions), method = "lm", se = FALSE, color = "blue") +
   labs(x = "Observed", y = "Predicted") +
   theme_bw()
 
@@ -233,9 +218,9 @@ sample.dates <- parse_date_time(substr(rownames(train),2,7), orders = "ymd")
 sample.dates2 <- readRDS("2023-04-28_sccoos_dates.rds")
 
 ggplot() +
-  geom_line(aes(x = sample.dates, y = aou.cor.predict2.full$predictions), color = col3.aoucor, linewidth = 1, alpha = 0.7) +
-  geom_line(aes(x = sample.dates, y = train[,"aou.corrected"]), color = col4.aoupred, linewidth = 1, alpha = 0.7) +
-  # geom_line(aes(x = sample.dates, y = train[,"aou"]), color = "red") +
+  geom_line(aes(x = sample.dates, y = aop.cor.predict2.full$predictions), color = col3.aopcor, linewidth = 1, alpha = 0.7) +
+  geom_line(aes(x = sample.dates, y = train[,"aop.corrected"]), color = col4.aoppred, linewidth = 1, alpha = 0.7) +
+  # geom_line(aes(x = sample.dates, y = train[,"aop"]), color = "red") +
   ylim(c(-100,100)) +
   geom_hline(aes(yintercept = 0), alpha = 0.2) +
   labs(x = "Date", y = expression("Corrected AOP  ["*mu*"M]")) +
@@ -247,27 +232,27 @@ ggplot() +
   
 
 
-aou.cor.model$variable.importance[head(order(aou.cor.model$variable.importance, decreasing = T), n = 20)]
-# aou.cor.model.noOpt$variable.importance[head(order(aou.cor.model.noOpt$variable.importance, decreasing = T), n = 10)]
-aou.model$variable.importance[head(order(aou.model$variable.importance, decreasing = T), n = 10)]
-# aou.model.noOpt$variable.importance[head(order(aou.model.noOpt$variable.importance, decreasing = T), n = 10)]
+aop.cor.model$variable.importance[head(order(aop.cor.model$variable.importance, decreasing = T), n = 20)]
+# aop.cor.model.noOpt$variable.importance[head(order(aop.cor.model.noOpt$variable.importance, decreasing = T), n = 10)]
+aop.model$variable.importance[head(order(aop.model$variable.importance, decreasing = T), n = 10)]
+# aop.model.noOpt$variable.importance[head(order(aop.model.noOpt$variable.importance, decreasing = T), n = 10)]
 
-my.df <- data.frame(aou.cor.model$variable.importance[head(order(aou.cor.model$variable.importance, decreasing = T), n = 30)])
-saveRDS(my.df, file = "2023-05-25_aou_cor_RF_model_predictor_taxa.rds")
+my.df <- data.frame(aop.cor.model$variable.importance[head(order(aop.cor.model$variable.importance, decreasing = T), n = 30)])
+saveRDS(my.df, file = "2023-05-25_aop_cor_RF_model_predictor_taxa.rds")
 
-barplot(aou.cor.model$variable.importance[head(order(aou.cor.model$variable.importance, decreasing = T), n = 30)], las = 2)
+barplot(aop.cor.model$variable.importance[head(order(aop.cor.model$variable.importance, decreasing = T), n = 30)], las = 2)
 
-aou.cor.model$variable.importance <- factor(aou.cor.model$variable.importance, levels = aou.cor.model$variable.importance)
+aop.cor.model$variable.importance <- factor(aop.cor.model$variable.importance, levels = aop.cor.model$variable.importance)
 
 
-aou.cor.model.var.imp <- aou.cor.model$variable.importance
-aou.cor.model.var.imp <- data.frame(var.imp = aou.cor.model.var.imp, var = names(aou.cor.model.var.imp))
-aou.cor.model.var.imp <- aou.cor.model.var.imp[order(aou.cor.model.var.imp$var.imp, decreasing = T)[1:10],]
-aou.cor.model.var.imp$var <- factor(aou.cor.model.var.imp$var, levels = aou.cor.model.var.imp$var[order(aou.cor.model.var.imp$var.imp, decreasing = F)])
+aop.cor.model.var.imp <- aop.cor.model$variable.importance
+aop.cor.model.var.imp <- data.frame(var.imp = aop.cor.model.var.imp, var = names(aop.cor.model.var.imp))
+aop.cor.model.var.imp <- aop.cor.model.var.imp[order(aop.cor.model.var.imp$var.imp, decreasing = T)[1:10],]
+aop.cor.model.var.imp$var <- factor(aop.cor.model.var.imp$var, levels = aop.cor.model.var.imp$var[order(aop.cor.model.var.imp$var.imp, decreasing = F)])
 
 
 ggplot()+
-  geom_col(data = aou.cor.model.var.imp, aes(x = var, y = var.imp), fill = c(col5.other, col2.o2bio, col2.o2bio, col5.other, col5.other, col2.o2bio, col2.o2bio, col2.o2bio, col5.other, col5.other)) +
+  geom_col(data = aop.cor.model.var.imp, aes(x = var, y = var.imp), fill = c(col5.other, col2.o2bio, col2.o2bio, col5.other, col5.other, col2.o2bio, col2.o2bio, col2.o2bio, col5.other, col5.other)) +
   coord_flip() +
   labs(x = "Taxon", y = "Model Variable Importance") +
   theme_bw() +
@@ -280,8 +265,8 @@ ggplot()+
 
 #### which ASVs are best predictors ####
 
-aou.model <- readRDS("2023-05-10_aou_RF_model.rds")
-aou.cor.model <- readRDS("2023-05-10_aou_cor_RF_model.rds")
+aop.model <- readRDS("2023-05-10_aop_RF_model.rds")
+aop.cor.model <- readRDS("2023-05-10_aop_cor_RF_model.rds")
 
 read.map <- function(prefix, domain){
   map <- read.csv(paste0(prefix, '.', domain, '.seq_edge_map.csv'), header = T, row.names = 1)
@@ -339,7 +324,7 @@ par(old.par)
 
 ## heatmap of top predictors ##
 
-side.col <- colorRampPalette(c('red', 'ivory', 'blue'))(100)[as.numeric(cut(train$aou, breaks = 100))]
+side.col <- colorRampPalette(c('red', 'ivory', 'blue'))(100)[as.numeric(cut(train$aop, breaks = 100))]
 
 pdf(width = 20,
     height = 8)
