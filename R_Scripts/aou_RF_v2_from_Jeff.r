@@ -6,6 +6,8 @@ library(tidyverse)
 library(ranger)
 library(lubridate)
 library(vegan)
+library(ranger)
+library(Boruta)
 
 
 setwd('C://Users/haler/Documents/PhD-Bowman/SCCOOS_microbial_time_series/R_Data/')
@@ -22,8 +24,8 @@ set.seed(1234)
 
 # ---- load SCCOOS microbial community data ----
 
-asv.train <- readRDS(file = "2023-08-09_sccoos_com_df_rclr_cleaned.rds")
-asv.dates <- readRDS(file = "2023-08-08_sccoos_community_time_series_dates.rds")
+asv.train <- readRDS(file = "2023-10-17_sccoos_com_df_rclr_cleaned.rds")
+asv.dates <- readRDS(file = "2023-10-17_sccoos_community_time_series_dates.rds")
 
 # ---- load aou data ----
 
@@ -48,13 +50,22 @@ aop.df <- aop.df %>% group_by(Date) %>% summarize_all(.funs = mean)
 
 # ---- define training data ----
 
-asv.dates <- parse_date_time(asv.dates, orders = "Ymd")
+# asv.dates <- parse_date_time(asv.dates, orders = "Ymd")
 
 train <- asv.train
 train$Date <- asv.dates
 train <- merge(train, aop.df, by = "Date")
 
-saveRDS(train, "2023-08-08_ASV_abundance_data_and_AOP_cor.rds")
+saveRDS(train, "2023-10-17_ASV_abundance_data_and_AOP_cor.rds")
+
+# optional Boruta
+
+boruta.df <- Boruta(x = train[,c(2:(ncol(train)-9))], y = train$aop.corrected)
+
+boruta.results.df <- as.data.frame(boruta.df[["finalDecision"]])
+boruta.index <- rownames(boruta.results.df)[which(boruta.results.df$`boruta.df[["finalDecision"]]` != "Rejected")]
+
+
 
 train.train.i <- sample(1:dim(train)[1], ceiling(0.7 * dim(train)[1]))
 train.train <- train[train.train.i,]
@@ -62,13 +73,12 @@ train.test <- train[-train.train.i,]
 
 # ---- create random forest model ----
 
-library(ranger)
-
 ## toggle aop or aop.corrected depending on which you want to run
-response <- 'aop'
-# response <- 'aop.corrected'
+# response <- 'aop'
+response <- 'aop.corrected'
 
-predictors <- colnames(asv.train) # set predictors to asv global edge number
+# predictors <- colnames(asv.train) # set predictors to asv global edge number
+predictors <- boruta.index
 
 # ---- aou prediction model ----
 
@@ -91,7 +101,7 @@ abline(0, 1, lty = 2)
 #abline(m1.lm)
 summary(m1.lm)
 
-saveRDS(m1, "2023-08-08_aop_RF_model_noOpt.rds")
+saveRDS(m1, "2023-10-17_aop_cor_RF_model_noOpt_boruta.rds")
 
 
 # ---- parameter optimization ----
@@ -108,7 +118,8 @@ hyper.grid <- expand.grid(
 
 for(i in 1:nrow(hyper.grid)){
   
-  predictors <- colnames(asv.train)[order(colSums(asv.train), decreasing = T)[1:hyper.grid$n.edges[i]]]
+  # predictors <- colnames(asv.train)[order(colSums(asv.train), decreasing = T)[1:hyper.grid$n.edges[i]]]
+  predictors <- boruta.index
   
   ## try clause necessary because some parameter combinations are
   ## incompatible
@@ -140,7 +151,9 @@ selected.params <- hyper.grid[which.min(hyper.grid$OOB_RMSE),]
 
 #### create final model ####
 
-predictors <- colnames(asv.train)[order(colSums(asv.train), decreasing = T)[1:selected.params$n.edges]]
+# predictors <- colnames(asv.train)[order(colSums(asv.train), decreasing = T)[1:selected.params$n.edges]]
+predictors <- boruta.index
+
 
 m2 <- ranger(
   formula = as.formula(paste(response, '.', sep = '~')),
@@ -154,7 +167,7 @@ m2 <- ranger(
   oob.error = T
 )
 
-saveRDS(m2, "2023-08-08_aop_RF_model.rds")
+saveRDS(m2, "2023-10-17_aop_cor_RF_model_boruta.rds")
 
 
 aop.predict <- predict(m1, train.test)
@@ -170,15 +183,18 @@ summary(lm(aop.predict$predictions ~ train.test[,response]))
 
 # ---- RMSE calcs ----
 
-aop.model <- readRDS("2023-08-08_aop_RF_model.rds")
-aop.cor.model <- readRDS("2023-08-08_aop_cor_RF_model.rds")
-aop.model.noOpt <- readRDS("2023-08-08_aop_RF_model_noOpt.rds")
-aop.cor.model.noOpt <- readRDS("2023-08-08_aop_cor_RF_model_noOpt.rds")
+aop.model <- readRDS("2023-10-17_aop_RF_model.rds")
+aop.cor.model <- readRDS("2023-10-17_aop_cor_RF_model.rds")
+aop.model.noOpt <- readRDS("2023-10-17_aop_RF_model_noOpt.rds")
+aop.cor.model.noOpt <- readRDS("2023-10-17_aop_cor_RF_model_noOpt.rds")
+aop.cor.model.boruta <- readRDS("2023-10-17_aop_cor_RF_model_boruta.rds")
 
 aop.predict1 <- predict(aop.model.noOpt, train.test)
 aop.predict2 <- predict(aop.model, train.test)
 aop.cor.predict1 <- predict(aop.cor.model.noOpt, train.test)
 aop.cor.predict2 <- predict(aop.cor.model, train.test)
+aop.cor.boruta.predict1 <- predict(aop.cor.model.noOpt, train.test)
+aop.cor.boruta.predict2 <- predict(aop.cor.model.boruta, train.test)
 
 response <- 'aop'
 summary(lm(aop.predict1$predictions ~ train.test[,response]))
@@ -189,8 +205,11 @@ sqrt(mean((aop.predict2$predictions - train.test[,response])^2))
 response <- 'aop.corrected'
 summary(lm(aop.cor.predict1$predictions ~ train.test[,response]))
 summary(lm(aop.cor.predict2$predictions ~ train.test[,response]))
+summary(lm(aop.cor.boruta.predict2$predictions ~ train.test[,response])) #boruta
 sqrt(mean((aop.cor.predict1$predictions - train.test[,response])^2))
 sqrt(mean((aop.cor.predict2$predictions - train.test[,response])^2))
+sqrt(mean((aop.cor.boruta.predict2$predictions - train.test[,response])^2)) #boruta
+
 
 ggplot() +
   geom_point(aes(x = train.test[,"aop"], y = aop.predict2$predictions), color = "black") +
