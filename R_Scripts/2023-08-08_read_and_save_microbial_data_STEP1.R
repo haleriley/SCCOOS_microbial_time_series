@@ -12,7 +12,7 @@ asv18S <- read.csv('20230717_raw/20230717_sccoos.eukarya.unique_tally.csv', head
 asv16S.bac <- read.csv('20230717_raw/20230717_sccoos.bacteria.unique_tally.csv', header = T, row.names = 1)
 asv16S.arc <- read.csv('20230717_raw/20230717_sccoos.archaea.unique_tally.csv', header = T, row.names = 1)
 
-map.bac <- read.csv("20230717_raw/20230717_sccoos.eukarya.seq_edge_map.csv")
+map.bac <- read.csv("20230717_raw/20230717_sccoos.bacteria.seq_edge_map.csv")
 map.arc <- read.csv("20230717_raw/20230717_sccoos.archaea.seq_edge_map.csv")
 map.euk <- read.csv("20230717_raw/20230717_sccoos.eukarya.seq_edge_map.csv")
 
