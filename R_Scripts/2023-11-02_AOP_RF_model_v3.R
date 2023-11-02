@@ -1,4 +1,6 @@
 # AOP prediction from SCCOOS 16S&18S microbial time series random forest model
+# 2023-11-02
+# RJH
 
 # ---- library ----
 
@@ -136,8 +138,8 @@ for(i in 1:nrow(hyper.grid)){ ## AKA for every combination of parameter settings
   }, silent = F)
   
   print(paste(i, 'out of', nrow(hyper.grid), hyper.grid$OOB_RMSE[i]))
-
-  }
+  
+}
 
 hyper.grid$OOB_RMSE[hyper.grid$OOB_RMSE == 0] <- NA
 hyper.grid <- na.omit(hyper.grid)
