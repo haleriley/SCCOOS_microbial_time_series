@@ -11,11 +11,7 @@ library(plotly)
 
 setwd('C://Users/haler/Documents/PhD-Bowman/SCCOOS_microbial_time_series/R_Data/')
 
-col1.aou <- "#648fff"
-col2.o2bio <- "#dc267f"
-col3.aoucor <- "#fe6100" 
-col4.aoupred <- "#785ef0" 
-col5.other <- "#ffb000"
+
 
 
 set.seed(1234)
@@ -82,27 +78,27 @@ low.dates.16S <- rowSums(asv16S.low)
 rowSums(asv16S.low)
 hist(rowSums(asv16S.low))
 saveRDS(low.dates.16S, "16S_counts_low.rds")
-asv16S <- asv16S[which(rowSums(asv16S) > 4000),] # remove samples with less than 5000 total reads
+asv16S <- asv16S[which(rowSums(asv16S) > 4000),] # remove samples with less than 4000 total reads
 asv16S <- asv16S[,which(colSums(asv16S) > 100)] # remove taxa with less than 100 reads across samples
 # asv16S.raw <- asv16S
 
 
 # identify samples with low reads that need to be resequenced
 
-# redos <- asv16S[which(substr(rownames(asv16S), start = 15, stop = 18) == "redo"),]
-# redo.dates <- substr(rownames(redos), 1, 6)
-# low.dates <- substr(names(low.dates.16S), 1,6)
-# 
-# lalala <- low.dates[which(low.dates %in% redo.dates == FALSE)]
-# lalala <- lalala[22:68]
-# write.csv(lalala, file = "2023-09-07_sccoos_need_to_redo_all_2021_2022.csv")
-# 
-# a <- ggplot() +
-#   geom_point(data = asv16S, aes(x = parse_date_time(substr(rownames(asv16S), start = 1, stop = 6), orders = "ymd"), y = 1.2), color = "blue") +
-#   geom_point(data = asv16S.low, aes(x = parse_date_time(substr(rownames(asv16S.low), start = 1, stop = 6), orders = "ymd"), y = 1), color = "red") +
-#   ylim(c(0,3))
-# ggplotly(a)
-  
+redos <- asv16S[which(substr(rownames(asv16S), start = 15, stop = 18) == "redo"),]
+redo.dates <- substr(rownames(redos), 1, 6)
+low.dates <- substr(names(low.dates.16S), 1,6)
+
+lalala <- low.dates[which(low.dates %in% redo.dates == FALSE)]
+lalala <- lalala[22:68]
+write.csv(lalala, file = "2023-09-07_sccoos_need_to_redo_all_2021_2022.csv")
+
+a <- ggplot() +
+  geom_point(data = asv16S, aes(x = parse_date_time(substr(rownames(asv16S), start = 1, stop = 6), orders = "ymd"), y = 1.2), color = "blue") +
+  geom_point(data = asv16S.low, aes(x = parse_date_time(substr(rownames(asv16S.low), start = 1, stop = 6), orders = "ymd"), y = 1), color = "red") +
+  ylim(c(0,3))
+ggplotly(a)
+
 
 # ---- normalize and combine ----
 

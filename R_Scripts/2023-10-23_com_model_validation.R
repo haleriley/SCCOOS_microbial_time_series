@@ -30,6 +30,13 @@ aop.cor.model.noOpt <- readRDS("2023-10-23_aop_cor_RF_model_noOpt.rds")
 aop.cor.model.boruta <- readRDS("2023-10-23_aop_cor_RF_model_boruta.rds")
 aop.cor.model.noOpt.boruta <- readRDS("2023-10-23_aop_cor_RF_model_noOpt_boruta.rds")
 
+# ---- set plot colors ----
+
+col1.aou <- "#648fff"
+col2.o2bio <- "#dc267f"
+col3.aoucor <- "#fe6100" 
+col4.aoupred <- "#785ef0" 
+col5.other <- "#ffb000"
 
 # ---- predictions, summaries, and RMSE ----
 
@@ -72,42 +79,22 @@ sqrt(mean((aop.cor.boruta.predict.Opt.full$predictions - train[,response])^2)) #
 
 
 ggplot() +
-  geom_point(aes(x = train.test[,"aop"], y = aop.predict2$predictions), color = "black") +
-  geom_point(aes(x = train.test[,"aop.corrected"], y = aop.cor.predict2$predictions), color = col4.aoupred) +
-  geom_abline(slope = 1, intercept = 0, color = col5.other, size = 1) +
-  geom_smooth(aes(x = train.test[,"aop"], y = aop.predict2$predictions), method = "lm", se = FALSE, color = "black") +
-  geom_smooth(aes(x = train.test[,"aop.corrected"], y = aop.cor.predict2$predictions), method = "lm", se = FALSE, color = col4.aoupred) +
-  labs(x = "Observed", y = "Predicted") +
-  theme_bw()
-
-
-aop.cor.predict2.full <- predict(aop.cor.model, train)
-summary(lm(aop.cor.predict2.full$predictions ~ train[,response]))
-sqrt(mean((aop.cor.predict2.full$predictions - train[,response])^2))
-
-
-ggplot() +
-  geom_point(aes(x = train[,"aop.corrected"], y = aop.cor.predict2.full$predictions), color = "blue") +
-  geom_abline(slope = 1, intercept = 0, color = "red", size = 1) +
-  geom_smooth(aes(x = train[,"aop.corrected"], y = aop.cor.predict2.full$predictions), method = "lm", se = FALSE, color = "blue") +
-  labs(x = "Observed", y = "Predicted") +
-  theme_bw()
-
-sample.dates <- parse_date_time(substr(rownames(train),2,7), orders = "ymd")
-sample.dates2 <- readRDS("2023-04-28_sccoos_dates.rds")
-
-ggplot() +
-  geom_line(aes(x = sample.dates, y = aop.cor.predict2.full$predictions), color = col3.aopcor, linewidth = 1, alpha = 0.7) +
-  geom_line(aes(x = sample.dates, y = train[,"aop.corrected"]), color = col4.aoppred, linewidth = 1, alpha = 0.7) +
-  # geom_line(aes(x = sample.dates, y = train[,"aop"]), color = "red") +
-  ylim(c(-100,100)) +
-  geom_hline(aes(yintercept = 0), alpha = 0.2) +
-  labs(x = "Date", y = expression("Corrected AOP  ["*mu*"M]")) +
-  # ylim(c(-100,100)) +
+  geom_hline(yintercept = 0, color = "black", size = 1) +
+  geom_line(aes(x = train$Date, y = train$aop.corrected, color = "red"), size = 1, alpha = 0.85) +
+  geom_line(aes(x = train$Date, y = aop.cor.boruta.predict.Opt.full$predictions, color = "blue"), size = 1, alpha = 0.85) +
+  labs(x = "Date", y = "AOP [uM]") +
+  scale_color_manual(name = "AOP", values = c("red", "blue"), labels = c("Predicted", "Calculated")) +
   theme_bw() +
-  scale_x_datetime(date_breaks = "1 year", date_labels = "%Y") +
-  theme(panel.grid = element_blank()) +
-  theme(axis.title = element_text(size = 14), axis.text = element_text(size = 12)) 
+  ggtitle("Apparent Oxygen Produced (AOP) Predicted by Microbial Community Time Series") +
+  theme(axis.title = element_text(size = 14, face = "bold"), 
+        axis.text = element_text(size = 12), 
+        legend.text = element_text(size = 12), 
+        legend.title = element_text(size = 14, face = "bold"),
+        title = element_text(face = "bold")) +
+  ylim(c(-80,80)) + scale_y_continuous(breaks = c(-75,-50,-25,0,25,50,75))
+  
+
+
 
 
 # ---- identify important predicting taxa ----
