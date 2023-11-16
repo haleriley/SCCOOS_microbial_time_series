@@ -3,7 +3,7 @@
 # 2023-08-08
 
 
-setwd("R_Data/")
+setwd('C://Users/haler/Documents/PhD-Bowman/SCCOOS_microbial_time_series/R_Data/')
 
 
 #### load asvs and save ####
