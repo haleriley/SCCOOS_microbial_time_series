@@ -10,6 +10,7 @@ library(lubridate)
 library(vegan)
 library(ranger)
 library(Boruta)
+library(janitor)
 
 # ---- set working directory ----
 setwd('C://Users/haler/Documents/PhD-Bowman/SCCOOS_microbial_time_series/R_Data/')
@@ -20,14 +21,14 @@ set.seed(1234)
 
 # ---- load SCCOOS microbial community data ----
 
-asv.train <- readRDS(file = "2023-10-17_sccoos_com_df_rclr_cleaned.rds")
-asv.dates <- readRDS(file = "2023-10-17_sccoos_community_time_series_dates.rds")
+asv.train <- readRDS(file = "2024-02-14_sccoos_relabund_by_taxon_wide.rds")
+asv.dates <- readRDS(file = "2024-02-05_sccoos_community_time_series_dates.rds")
 
 # ---- load and format AOP data ----
 
 ## these AOP data will become my response variable
 
-aop.df <- readRDS('../../O2-Ar_time_series/R_Data/2023-08-08_aop_cor_df.rds')
+aop.df <- readRDS('../../O2-Ar_time_series/R_Data/2024-01-19_aop_cor_df.rds')
 aop.df$Date <- parse_date_time(paste(year(aop.df$Date.Time), month(aop.df$Date.Time), day(aop.df$Date.Time), sep = "-"), orders = "Ymd")
 aop.df$Date.Time <- NULL
 aop.df <- aop.df %>% group_by(Date) %>% summarize_all(.funs = mean)
@@ -36,16 +37,30 @@ aop.df <- aop.df %>% group_by(Date) %>% summarize_all(.funs = mean)
 
 ## combining cleaned ASV data with AOP response variable data so everything is in the same data frame
 train <- asv.train
-train$Date <- asv.dates
+train$Date <- parse_date_time(rownames(train), orders = "ymd")
 train <- merge(train, aop.df, by = "Date")
 
-saveRDS(train, "2023-10-17_ASV_abundance_data_and_AOP_cor.rds")
+saveRDS(train, "2024-02-14_ASV_abundance_data_and_AOP_cor.rds")
+
+# ---- normalize data ----
+
+# train[,c(2:(ncol(train)-12))] <- train[,c(2:(ncol(train)-12))]/rowSums(train[,c(2:(ncol(train)-12))])
+
+# ---- rclr transform ----
+
+train[,c(2:(ncol(train)-12))] <- decostand(train[,c(2:(ncol(train)-12))], method = "rclr")
+
+# ---- set aside just relative abundance data ----
+
+train.relabund <- train[,c(2:(ncol(train)-12))]
+train.relabund <- clean_names(train.relabund) # clean names to remove spaces and weird symbols in taxonomic data
+colnames(train)[c(2:(ncol(train)-12))] <- colnames(train.relabund)
 
 # ---- Boruta predictor selection algorithm ----
 
 ## this removes precitor variables (ASVs) that predict AOP worse than a randomized version of themselves
 
-boruta.df <- Boruta(x = train[,c(2:(ncol(train)-9))], y = train$aop.corrected)
+boruta.df <- Boruta(x = train.relabund, y = train$aop.corrected)
 
 boruta.results.df <- as.data.frame(boruta.df[["finalDecision"]])
 boruta.index <- rownames(boruta.results.df)[which(boruta.results.df$`boruta.df[["finalDecision"]]` != "Rejected")]
@@ -57,8 +72,9 @@ train.train.index <- sample(1:dim(train)[1], ceiling(0.7 * dim(train)[1]))
 train.train <- train[train.train.index,]
 train.test <- train[-train.train.index,]
 
-saveRDS(train.test, "2023-10-23_train_test.rds")
-
+saveRDS(train.test, "2024-02-14_RF_train_test.rds")
+saveRDS(train.train, "2024-02-14_RF_train_train.rds")
+saveRDS(train, "2024-02-14_RF_train.rds")
 
 # ---- set response and predictor variables ----
 
@@ -67,7 +83,7 @@ saveRDS(train.test, "2023-10-23_train_test.rds")
 response <- 'aop.corrected'
 
 ## set predictors as only the ASVs that Boruta has determined to be decent predictors 
-predictors <- boruta.index[order(colSums(asv.train)[colnames(asv.train) %in% boruta.index], decreasing = T)]
+predictors <- boruta.index[order(colSums(train.relabund)[colnames(train.relabund) %in% boruta.index], decreasing = T)]
 
 # ---- AOP prediction model ----
 
@@ -92,7 +108,7 @@ abline(0, 1, lty = 2)
 abline(m1.lm)
 summary(m1.lm)
 
-saveRDS(m1, "2023-10-23_aop_cor_RF_model_noOpt_boruta.rds")
+saveRDS(m1, "2024-02-14_aop_cor_RF_model_noOpt_boruta.rds")
 
 
 # ---- parameter optimization ----
@@ -110,7 +126,7 @@ hyper.grid <- expand.grid(
 
 for(i in 1:nrow(hyper.grid)){ ## AKA for every combination of parameter settings
   
-  predictors <- boruta.index[order(colSums(asv.train)[colnames(asv.train) %in% boruta.index], decreasing = T)] # cannot use more n.edges than boruta predictors
+  # predictors <- boruta.index[order(colSums(asv.train)[colnames(asv.train) %in% boruta.index], decreasing = T)] # cannot use more n.edges than boruta predictors
   
   try({ ## try clause necessary because some parameter combinations are incompatible
     
@@ -151,7 +167,7 @@ selected.params <- hyper.grid[which.min(hyper.grid$OOB_RMSE),]
 
 # ---- create final model ----
 
-predictors <- boruta.index[order(colSums(asv.train)[colnames(asv.train) %in% boruta.index], decreasing = T)]
+# predictors <- boruta.index[order(colSums(asv.train)[colnames(asv.train) %in% boruta.index], decreasing = T)]
 
 ## create second model using optimal selected paramters
 m2 <- ranger(
@@ -166,7 +182,7 @@ m2 <- ranger(
   oob.error = T
 )
 
-saveRDS(m2, "2023-10-23_aop_cor_RF_model_boruta.rds")
+saveRDS(m2, "2024-02-14_aop_cor_RF_model_boruta.rds")
 
 ## compare m1 and m2 with and without parameter optimization
 aop.predict <- predict(m1, train.test)

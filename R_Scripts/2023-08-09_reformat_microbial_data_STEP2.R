@@ -19,7 +19,7 @@ set.seed(1234)
 
 ## alternatively load existing Rdata file
 
-load('20230808_sccoos_asv.Rdata')
+load('20240220_sccoos_asv.Rdata')
 # load('C:/Users/haler/Documents/PhD-Bowman/MIMS_O2-Ar_time_series/16S_sccoos/20230511_sccoos_asv.Rdata')
 
 
@@ -64,6 +64,16 @@ asv18S <- asv18S[order(row.names(asv18S)),]
 asv18S.raw <- asv18S
 summary(rowSums(asv18S))
 
+# remove samples that have been replaced by redos
+asv18S$dates <- sapply(strsplit(row.names(asv18S), "_"), `[`, 1)
+asv18S$sample.name <- rownames(asv18S)
+trouble.dates <- asv18S %>% group_by(dates) %>% filter(n() > 1)
+keep.index <- which(sapply(strsplit(trouble.dates$sample.name, "_"), `[`, 2) == "SCCOOS" | sapply(strsplit(trouble.dates$sample.name, "_"), `[`, 3) == "redo")
+remove.index <- as.numeric(rownames(trouble.dates)[-keep.index])
+remove.samples <- trouble.dates$sample.name[remove.index]
+asv18S <- asv18S[-which(asv18S$sample.name %in% remove.samples),]
+
+
 asv16S.arc <- asv16S.arc[row.names(asv16S.bac),]
 asv16S <- merge(asv16S.arc, asv16S.bac, by = 0, all = T)
 row.names(asv16S) <- asv16S$Row.names
@@ -82,8 +92,18 @@ asv16S <- asv16S[which(rowSums(asv16S) > 4000),] # remove samples with less than
 asv16S <- asv16S[,which(colSums(asv16S) > 100)] # remove taxa with less than 100 reads across samples
 # asv16S.raw <- asv16S
 
+# remove samples that have been replaced by redos
+asv16S$dates <- sapply(strsplit(row.names(asv16S), "_"), `[`, 1)
+asv16S$sample.name <- rownames(asv16S)
+trouble.dates <- asv16S %>% group_by(dates) %>% filter(n() > 1)
+keep.index <- which(sapply(strsplit(trouble.dates$sample.name, "_"), `[`, 2) == "SCCOOS" | sapply(strsplit(trouble.dates$sample.name, "_"), `[`, 3) == "redo")
+remove.index <- as.numeric(rownames(trouble.dates)[-keep.index])
+remove.samples <- trouble.dates$sample.name[remove.index]
+asv16S <- asv16S[-which(asv16S$sample.name %in% remove.samples),]
 
-# identify samples with low reads that need to be resequenced
+
+
+# ---- identify samples with low reads that need to be resequenced -----
 
 redos <- asv16S[which(substr(rownames(asv16S), start = 15, stop = 18) == "redo"),]
 redo.dates <- substr(rownames(redos), 1, 6)
@@ -108,11 +128,8 @@ asv16S.train <- asv16S
 # row.names(asv18S.train) <- sapply(strsplit(row.names(asv18S.train), "_"), `[`, 1)
 # row.names(asv16S.train) <- sapply(strsplit(row.names(asv16S.train), "_"), `[`, 1)
 
-asv16S.train$dates <- sapply(strsplit(row.names(asv16S.train), "_"), `[`, 1)
-asv18S.train$dates <- sapply(strsplit(row.names(asv18S.train), "_"), `[`, 1)
-
-saveRDS(asv16S.train, file = "2023-09-05_sccoos_16S.rds")
-saveRDS(asv18S.train, file = "2023-09-05_sccoos_18S.rds")
+saveRDS(asv16S.train, file = "2024-02-20_sccoos_16S.rds")
+saveRDS(asv18S.train, file = "2024-02-20_sccoos_18S.rds")
 
 
 shared.dates <- intersect(asv18S.train$dates, asv16S.train$dates)
@@ -126,8 +143,10 @@ asv.train <- merge(asv18S.train, asv16S.train, by = "dates", all = T)
 asv.train[is.na(asv.train)] <- 0
 # asv.train <- asv.train[-(which(duplicated(asv.train$dates) == TRUE)-1),] # keeping second instance of repeated dates
 asv.dates <- parse_date_time(asv.train$dates, orders = "ymd")
+
+
 rownames(asv.train) <- asv.train$dates
-asv.train <- asv.train[,-1]
+asv.train <- asv.train[,-which(colnames(asv.train) %in% c("dates", "sample.name.x", "sample.name.y"))]
 
 
 # remove singletons and low abundance organisms 
@@ -138,8 +157,8 @@ summary(temp)
 hist(temp)
 asv.train <- asv.train[,-which(colSums(asv.train) < 10)]
 
-saveRDS(asv.train, "2023-10-17_asv_seq_df.rds")
-saveRDS(asv.dates,  "2023-10-17_sccoos_community_time_series_dates.rds")
+saveRDS(asv.train, "2024-02-20_asv_seq_df.rds")
+saveRDS(asv.dates,  "2024-02-20_sccoos_community_time_series_dates.rds")
 
 
 
@@ -175,13 +194,18 @@ asv.train <- data.frame(t(asv.train))
 
 asv.train <- asv.train/rowSums(asv.train)
 
-# ---- rclr transformation ----
+# ---- rclr or hellinger transformation ----
 
 asv.train <- decostand(asv.train, method = "rclr")
+asv18S.rclr <- decostand(asv18S, method = "rclr")
+
+asv.train <- decostand(asv.train, method = "hellinger")
+
 
 # ---- save data ----
 
-saveRDS(asv.train, "2023-10-17_sccoos_com_df_rclr_cleaned.rds")
+saveRDS(asv.train, "2024-02-20_sccoos_com_df_hellinger_cleaned.rds")
+saveRDS(asv18S, "2024-02-20_sccoos_com_df_rclr_cleaned.rds")
 
 
 

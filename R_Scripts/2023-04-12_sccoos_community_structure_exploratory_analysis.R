@@ -11,49 +11,70 @@ library(vegan)
 library(plotly)
 library(goeveg)
 library(patchwork)
+library(dplyr)
 
 # ---- read in data ----
 
-setwd("C://Users/haler/Documents/PhD-Bowman/MIMS-miniDOT_O2-Ar_Study/16S_sccoos/")
+setwd("C://Users/haler/Documents/PhD-Bowman/SCCOOS_microbial_time_series/R_Data/")
 
-sccoos <- readRDS("R_Data/2023-04-12_sccoos_combined_tax_abund.rds")
+sccoos <- readRDS("2024-02-20_sccoos_com_df_hellinger_cleaned.rds") # toggle this is wanting both 16S + 18S
+# sccoos <- readRDS("2024-02-20_asv_seq_df.rds") # toggle this is wanting both 16S + 18S
+# sccoos <- readRDS("2024-02-20_sccoos_18S.rds") # toggle this if only wanting 18S
 
-sccoos.env <- readRDS("../R_Data/2023-04-12_sccoos_env_data_daily_mean.rds")
+sccoos.env <- readRDS("../../O2-Ar_time_series/R_Data/2024-02-14_sccoos_env_data_daily_mean.rds")
 sccoos.env <- data.frame(sccoos.env)
 
-aou.df <- read.csv("../R_Data/2023-04-28_corrected_aou.csv")
+aou.df <- read.csv("../../O2-Ar_time_series/R_Data/2023-04-28_corrected_aou.csv")
 
-mode.df <- readRDS("2023-05-11_modes_aou.rds")
+# mode.df <- readRDS("2023-05-11_modes_aou.rds")
 
-taxa.bac <- read.csv("updated_files/20230503_sccoos.bacteria.taxon_map.csv")
-taxa.arc <- read.csv("updated_files/20230503_sccoos.archaea.taxon_map.csv")
-taxa.euk <- read.csv("updated_files/20230503_sccoos.eukarya.taxon_map.csv")
+# taxa.bac <- read.csv("R_data/20230918/20230918_sccoos.bacteria.taxon_map.csv")
+# taxa.arc <- read.csv("R_data/20230918/20230918_sccoos.archaea.taxon_map.csv")
+# taxa.euk <- read.csv("R_data/20230918/20230918_sccoos.eukarya.taxon_map.csv")
 
+load('20240220_sccoos_asv.Rdata')
 
-model.predictor.taxa <- readRDS("2023-05-25_aou_cor_RF_model_predictor_taxa.rds")
+# R_data/20230918/20230918model.predictor.taxa <- readRDS("2023-05-25_aou_cor_RF_model_predictor_taxa.rds")
 
 set.seed(1234)
 
 
+# ---- reformat taxonomic data ----
 
-load('20230410_sccoos_asv.Rdata')
+map.all <- rbind(map.bac, map.arc, map.euk)
+
+taxa.all <- bind_rows(list(taxa.bac, taxa.arc, taxa.euk))
+colnames(taxa.all)
+col_order <- c("X", "superkingdom", "kingdom", "supergroup", "division", "phylum", "clade", "class", "order", "family", "genus", "species", "strain", "taxon")
+taxa.all <- taxa.all[,col_order]
+colnames(taxa.all)[1] <- "global_edge_num"
 
 
+# ---- reformat abundance data and merge with taxonomic data ----
 
-# ---- clean data a bit more ----
+# sccoos$sample.date <- parse_date_time(sccoos$dates, orders = "ymd") # toggle this for only 18S
+sccoos$sample.date <- parse_date_time(rownames(sccoos), orders = "ymd") # toggle this for all 16S + 18S
 
-# test <- sccoos %>% group_by(map, sample.date) %>% summarize(abundance = sum(abundance))
+sccoos <- sccoos %>% pivot_longer(cols = colnames(sccoos)[-which(colnames(sccoos) %in% c("sample.date", "dates", "sample.name"))], names_to = "X", values_to = "abundance")
+
+sccoos <- sccoos %>% group_by(sample.date, X) %>% summarize_all(mean) # toggle for 16S + 18S
+# sccoos <- sccoos[,-c(1:2)] %>% group_by(sample.date, X) %>% summarize_all(mean) # toggle for 18S
+
+sccoos <- merge(sccoos, map.all, by = "X")
+
+sccoos <- merge(sccoos, taxa.all, by = "global_edge_num")
+
 
 # ---- reformat data ----
 
 sccoos$abundance <- as.numeric(sccoos$abundance)
 
-sccoos <- sccoos %>% group_by(sample.date, taxon) %>% summarize(abundance = sum(abundance))
+sccoos <- sccoos %>% group_by(sample.date, X) %>% summarize(abundance = sum(abundance))
 sccoos <- data.frame(sccoos)
 sccoos <- sccoos[which(is.na(sccoos$sample.date) == FALSE),]
-sccoos <- sccoos[which(sccoos$taxon != ""),]
+sccoos <- sccoos[which(sccoos$X != ""),]
 
-sccoos <- sccoos %>% pivot_wider(id_cols = sample.date, names_from = taxon, values_from = abundance)
+sccoos <- sccoos %>% pivot_wider(id_cols = sample.date, names_from = X, values_from = abundance)
 # something here is re-introducing NA's, but not sure what. Going to replace NAs with 0s, at least for now
 
 sccoos[is.na(sccoos)] <- 0
@@ -62,10 +83,15 @@ my.rownames <- sccoos$sample.date
 sccoos <- sccoos[,-1]
 rownames(sccoos) <- my.rownames # ignore warning
 
-# saveRDS(rownames(sccoos), file = "2023-04-28_sccoos_dates.rds")
+# saveRDS(rownames(sccoos), file = "2024-02-14_sccoos_dates.rds")
 
-my.year.colors <- c("red", "gold", "darkgreen", "blue", "purple")
-my.mode.colors <- rainbow(6, rev=TRUE)
+my.year.colors <- c("red", "orange", "gold", "darkgreen", "blue", "purple")
+# my.mode.colors <- rainbow(6, rev=TRUE)
+
+saveRDS(sccoos, file = "2024-02-21_sccoos_relabund_by_seq_wide_all_hellinger.rds")
+saveRDS(map.all, file = "2024-02-21_map_all.rds")
+saveRDS(taxa.all, file = "2024-02-21_taxa_all.rds")
+
 
 # # ---- PCoA ordination ----
 # 
@@ -185,40 +211,47 @@ sccoos.nmds$Year <- year(sccoos.nmds$sample.date)
 sccoos.nmds$Month <- month(sccoos.nmds$sample.date)
 sccoos.nmds$Day <- day(sccoos.nmds$sample.date)
 
-aou.df$sample.date <- parse_date_time(substr(aou.df$Date.Time, 1, 10), orders = "Ymd")
+# aou.df$sample.date <- parse_date_time(substr(aou.df$Date.Time, 1, 10), orders = "Ymd")
+# combo <- merge(sccoos.nmds, aou.df, by = "sample.date")
 
-combo <- merge(sccoos.nmds, aou.df, by = "sample.date")
+# colnames(mode.df)[1] <- "sample.date"
 
-colnames(mode.df)[1] <- "sample.date"
+# test <- merge(combo, mode.df, by = "sample.date")
 
-test <- merge(combo, mode.df, by = "sample.date")
+# combo <- combo[-ncol(combo)] %>% group_by(sample.date) %>% summarize_all(mean)
+# 
+# combo$trophic.status <- "A"
+# combo$trophic.status[which(combo$aou.corrected < 0)] <- "H"
 
-combo <- combo[-ncol(combo)] %>% group_by(sample.date) %>% summarize_all(mean)
-
-combo$trophic.status <- "A"
-combo$trophic.status[which(combo$aou.corrected < 0)] <- "H"
 
 sccoos.species <- as.data.frame(NMS$species)
 sccoos.species$NMS.length <- sqrt(sccoos.species$MDS1^2 + sccoos.species$MDS2^2)
 sccoos.species.top <- sccoos.species[head(order(sccoos.species$NMS.length, decreasing = T), n = 20),]
-sccoos.species.model.predictors <- sccoos.species[which((rownames(sccoos.species) %in% rownames(model.predictor.taxa)) == TRUE),]
+# sccoos.species.model.predictors <- sccoos.species[which((rownames(sccoos.species) %in% rownames(model.predictor.taxa)) == TRUE),]
 
 sccoos.species.top$taxon <- rownames(sccoos.species.top)
-sccoos.species.model.predictors$taxon <- rownames(sccoos.species.model.predictors)
+# sccoos.species.model.predictors$taxon <- rownames(sccoos.species.model.predictors)
 
 index <- which(colnames(taxa.euk) == "X")
 test <- distinct(taxa.euk[,-index])
 
 try.it <- merge(sccoos.species.top, test, by = "taxon")
-try.it <- merge(sccoos.species.model.predictors, test, by = "taxon")
+# try.it <- merge(sccoos.species.model.predictors, test, by = "taxon")
 try.it <- try.it %>% group_by(class) %>% summarize(sum.length <- sum(NMS.length))
 
 
-# test <- distinct(taxa.bac[,-index])
-# 
-# try.it <- merge(sccoos.species.top, test, by = "taxon")
-# try.it <- merge(sccoos.species.model.predictors, test, by = "taxon")
-# try.it <- try.it %>% group_by(division) %>% summarize(sum.length <- sum(NMS.length))
+ggplot() +
+  geom_point(data = sccoos.nmds, aes(x = MDS1, y = MDS2, color = as.factor(Month))) +
+  scale_color_manual(values = rainbow(12, rev=F)) +
+  labs(x = "Dim 1", y = "Dim 2", color = "Month") + 
+  # ggtitle("NMDS Ordination of Microbial Time Series") +
+  theme_bw() +
+  theme(axis.title = element_text(size = 14, face = "bold"), 
+        axis.text = element_text(size = 12), 
+        legend.text = element_text(size = 12), 
+        legend.title = element_text(size = 14, face = "bold"),
+        title = element_text(face = "bold")) 
+
 
 scale.factor <- 1.2
 

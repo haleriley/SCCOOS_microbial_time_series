@@ -12,26 +12,31 @@ library(viridis)
 
 # ---- read in data ----
 
-setwd("C://Users/haler/Documents/PhD-Bowman/MIMS-miniDOT_O2-Ar_Study/16S_sccoos/")
+setwd("C://Users/haler/Documents/PhD-Bowman/SCCOOS_microbial_time_series/R_Data/")
 
-sccoos.aou.df <- readRDS("2023-05-12_ASV_abundance_data_and_AOU_AOU_cor.rds")
+# sccoos.aou.df <- readRDS("2023-05-12_ASV_abundance_data_and_AOU_AOU_cor.rds")
 
-sccoos.env.df <- readRDS("../R_Data/2023-05-11_combined_env_data_daily.rds")
+# sccoos.env.df <- readRDS("../R_Data/2023-05-11_combined_env_data_daily.rds")
 
-taxa.bac <- read.csv("updated_files/20230503_sccoos.bacteria.taxon_map.csv")
-taxa.arc <- read.csv("updated_files/20230503_sccoos.archaea.taxon_map.csv")
-taxa.euk <- read.csv("updated_files/20230503_sccoos.eukarya.taxon_map.csv")
+load(file = "20240205_sccoos_asv.Rdata")
 
+sccoos.unclean <- readRDS("2024-02-05_asv_seq_df.rds")
+sccoos <- readRDS("2024-02-16_sccoos_relabund_by_seq_wide.rds")
+
+sccoos.env <- readRDS("../../O2-Ar_time_series/R_Data/2024-02-14_sccoos_env_data_daily_mean.rds")
+sccoos.env <- data.frame(sccoos.env)
 
 # ---- train the SOM ----
 
-sample.size <- nrow(sccoos.aou.df)
+sample.size <- nrow(sccoos)
 
-grid.size <- ceiling(sample.size ^ (1/2.5))
-# grid.size <- 8
+grid.size <- ceiling(sample.size ^ (1/2.5)) # an estimation of how big grid should be
+grid.size <- 8 # or can set grid size manually
 som.grid <- somgrid(xdim = grid.size, ydim = grid.size, topo = 'hexagonal', toroidal = T)
 
-sccoos.com.df <- sccoos.aou.df[,-c(1004:1006)]
+# sccoos.com.df <- sccoos.aou.df[,-c(1004:1006)]
+sccoos.com.df <- sccoos
+
 
 # build SOM
 set.seed(1234)
@@ -172,46 +177,109 @@ colnames(my.k.results) <- c("k", "p")
 #   
 # }
 
-k1 = 5
-som.cluster <- kmeans(som.events, centers = k1)
-
-# test <- data.frame(som.model$data)
-
 try.it <- data.frame(som.model$unit.classif)
 
-try.it$dates <- parse_date_time(substr(rownames(sccoos.com.df), start = 2, stop = 7), orders = "ymd")
+# try.it$dates <- parse_date_time(substr(rownames(sccoos.com.df), start = 2, stop = 7), orders = "ymd")
+try.it$dates <- parse_date_time(rownames(sccoos.com.df), orders = "ymd")
 
-sccoos.aou.df$dates <- parse_date_time(substr(rownames(sccoos.aou.df), start = 2, stop = 7), orders = "ymd")
+sccoos$dates <- parse_date_time(rownames(sccoos), orders = "ymd")
 
-try.it <- merge(try.it, sccoos.aou.df[,c(1004:1007)], by = "dates")
-try.it$daou.cor <- c(diff(try.it$aou.corrected), NA)
+try.it <- merge(try.it, sccoos, by = "dates")
+try.it2 <- try.it
 
-temp <- sccoos.env.df[,c(1,14:25)]
-colnames(temp)[1] <- "dates"
+for(k in seq(from = 15, to = 30, by = 2)){
+  
+  k1 <- k
+  som.cluster <- kmeans(som.events, centers = k1)
+  
+  # test <- data.frame(som.model$data)
+  
+  som.categorization.df <- as.data.frame(cbind(c(1:length(som.cluster$cluster)), som.cluster$cluster))
+  colnames(som.categorization.df) <- c("som.model.unit.classif", "soms.mode")
+  
+  # try.it$daou.cor <- c(diff(try.it$aou.corrected), NA)
+  
+  try.it2 <- merge(som.categorization.df, try.it2, by = "som.model.unit.classif")
+  
+  try.it2$soms.mode <- factor(try.it2$soms.mode, levels = c(1:k1))
+  colnames(try.it2)[which(colnames(try.it2) == "soms.mode")] <- paste("soms.mode.k", k1, sep = "")
+  # try.it3 <- try.it3[,which(colnames(try.it3) != "som.model.unit.classif")]
+  
+  a <- ggplot(data = try.it2) + 
+    geom_point(aes(x = dates, y = try.it2[,2], color = try.it2[,2])) +
+    labs(x = "Date", y = "SOMS Mode", color = "") + 
+    # ggtitle("Microbial Time Series") +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(axis.title = element_text(size = 14, face = "bold"), 
+          axis.text = element_text(size = 12), 
+          legend.text = element_text(size = 12), 
+          legend.title = element_text(size = 14, face = "bold"),
+          title = element_text(face = "bold")) 
+  
+  print(a)
+  
+}
 
-try.it <- merge(try.it, temp, by = "dates")
+#### plot for Kaycie ####
 
-my.coords <- data.frame(c(1:(grid.size^2)))
-my.coords$X <- som.model$grid$pts[,1]
-my.coords$Y <- som.model$grid$pts[,2]
-my.coords$mode <- som.cluster$cluster
-colnames(my.coords)[1] <- "som.model.unit.classif"
+ggplot(data = try.it2) + 
+  geom_point(aes(x = dates, y = try.it2[,2], color = try.it2[,2])) +
+  labs(x = "Date", y = "SOMS Mode", color = "") + 
+  # ggtitle("Microbial Time Series") +
+  theme_bw() +
+  theme(legend.position = "none") +
+  theme(axis.title = element_text(size = 14, face = "bold"), 
+        axis.text = element_text(size = 12), 
+        legend.text = element_text(size = 12), 
+        legend.title = element_text(size = 14, face = "bold"),
+        title = element_text(face = "bold")) 
 
-try.it <- merge(try.it, my.coords, by = "som.model.unit.classif")
+# removing SOMS modes with 2 or less samples grouped into them to reduce total modes
+try.it3 <- try.it2 %>% group_by(soms.mode.k29) %>% filter(n() > 2) %>% ungroup()
+try.it3 <- as.data.frame(try.it3)
 
 
-## plots
+ggplot(data = try.it3) + 
+  geom_point(aes(x = dates, y = try.it3[,2], color = try.it3[,2]), size = 2) +
+  labs(x = "Date", y = "SOMS Mode", color = "") + 
+  ggtitle(paste("Microbial Time Series SOMS (k = ", length(unique(try.it3[,2])), ")", sep = "")) +
+  theme_bw() +
+  theme(legend.position = "none") +
+  theme(axis.title = element_text(size = 14, face = "bold"), 
+        axis.text = element_text(size = 12), 
+        legend.text = element_text(size = 12), 
+        legend.title = element_text(size = 14, face = "bold"),
+        title = element_text(face = "bold")) 
+
+
+saveRDS(try.it3, file = "2024-02-17_sccoos_SOMS_modes_k15-29_singletons_removed.rds")
+
+# som.grid <- somgrid(xdim = grid.size, ydim = grid.size, topo = 'hexagonal', toroidal = T)
+
+# plot SOMS grid, colored by mode
+plot(som.model, type = 'mapping', pch = 19, palette.name = topo.colors, main = '')
+
+mapping.points <- try.it3[,c(1:2)]
+grid.centers <- as.data.frame(som.model$grid$pts)
+grid.centers$som.model.unit.classif <- c(1:grid.size^2)
+mapping.points <- merge(mapping.points, grid.centers, by = "som.model.unit.classif", all.x = T, all.y = F)
+
 plot(som.model,
      main = '',
      type = "property",
      property = som.cluster$cluster,
      palette.name = rainbow)
-points(x = jitter(try.it$X, factor = 2), y = jitter(try.it$Y, factor = 2))
+# points(x = seq(from = 0, to = 8, by = 0.5, ), y = seq(from = 0, to = 8, by = 0.5),  lwd= 12)
+points(x = jitter(mapping.points$x, factor = 2), y = jitter(mapping.points$y, factor = 2))
 add.cluster.boundaries(som.model, som.cluster$cluster)
 
+# note that these are ALL of the SOMS groups, including the ones with 1-2 samples that we removed earlier. 
+# only the circles with points in them are used in the mode/time series figure above
+# not sure why points are getting cut off... will try and fix
 
 
-
+########## IGNORE BELOW ############
 # ---- plot ----
 
 
