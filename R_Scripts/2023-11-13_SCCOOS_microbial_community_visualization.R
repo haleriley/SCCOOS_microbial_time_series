@@ -20,8 +20,8 @@ set.seed(1234)
 
 # ---- load SCCOOS microbial community data and AOP data ----
 
-asv.train <- readRDS(file = "2023-10-17_asv_seq_df.rds")
-asv.dates <- readRDS(file = "2023-10-17_sccoos_community_time_series_dates.rds")
+asv.train <- readRDS(file = "2024-03-25_asv_seq_df.rds")
+asv.dates <- readRDS(file = "2024-03-25_sccoos_community_time_series_dates.rds")
 
 aop.df <- readRDS('../../O2-Ar_time_series/R_Data/2023-08-08_aop_cor_df.rds')
 aop.df$Date <- parse_date_time(paste(year(aop.df$Date.Time), month(aop.df$Date.Time), day(aop.df$Date.Time), sep = "-"), orders = "Ymd")

@@ -20,8 +20,8 @@ setwd("C://Users/haler/Documents/PhD-Bowman/SCCOOS_microbial_time_series/R_Data/
 
 load(file = "20240205_sccoos_asv.Rdata")
 
-sccoos.unclean <- readRDS("2024-02-05_asv_seq_df.rds")
-sccoos <- readRDS("2024-02-16_sccoos_relabund_by_seq_wide.rds")
+sccoos.unclean <- readRDS("2024-03-25_asv_seq_df.rds")
+sccoos <- readRDS("2024-03-25_sccoos_relabund_by_seq_wide_all_hellinger.rds")
 
 sccoos.env <- readRDS("../../O2-Ar_time_series/R_Data/2024-02-14_sccoos_env_data_daily_mean.rds")
 sccoos.env <- data.frame(sccoos.env)
@@ -31,7 +31,7 @@ sccoos.env <- data.frame(sccoos.env)
 sample.size <- nrow(sccoos)
 
 grid.size <- ceiling(sample.size ^ (1/2.5)) # an estimation of how big grid should be
-grid.size <- 8 # or can set grid size manually
+# grid.size <- 8 # or can set grid size manually
 som.grid <- somgrid(xdim = grid.size, ydim = grid.size, topo = 'hexagonal', toroidal = T)
 
 # sccoos.com.df <- sccoos.aou.df[,-c(1004:1006)]

@@ -6,10 +6,10 @@ library(tidyverse)
 library(ranger)
 library(lubridate)
 library(vegan)
-library(plotly)
+# library(plotly)
 
 
-setwd('C://Users/haler/Documents/PhD-Bowman/SCCOOS_microbial_time_series/R_Data/')
+setwd('C://Users/haler/Documents/PhD-Bowman/SCCOOS_microbial_time_series/R_Data/20240511_16S_18S/')
 
 
 
@@ -19,8 +19,10 @@ set.seed(1234)
 
 ## alternatively load existing Rdata file
 
-load('20240220_sccoos_asv.Rdata')
+load('20240724_sccoos_asv.Rdata')
 # load('C:/Users/haler/Documents/PhD-Bowman/MIMS_O2-Ar_time_series/16S_sccoos/20230511_sccoos_asv.Rdata')
+
+
 
 
 # # ---- pull out samples that need to be redone ----
@@ -128,8 +130,11 @@ asv16S.train <- asv16S
 # row.names(asv18S.train) <- sapply(strsplit(row.names(asv18S.train), "_"), `[`, 1)
 # row.names(asv16S.train) <- sapply(strsplit(row.names(asv16S.train), "_"), `[`, 1)
 
-saveRDS(asv16S.train, file = "2024-02-20_sccoos_16S.rds")
-saveRDS(asv18S.train, file = "2024-02-20_sccoos_18S.rds")
+saveRDS(asv16S.train, file = "2024-07-24_sccoos_16S.rds")
+saveRDS(asv18S.train, file = "2024-07-24_sccoos_18S.rds")
+
+asv.train <- asv18S
+
 
 
 shared.dates <- intersect(asv18S.train$dates, asv16S.train$dates)
@@ -146,7 +151,7 @@ asv.dates <- parse_date_time(asv.train$dates, orders = "ymd")
 
 
 rownames(asv.train) <- asv.train$dates
-asv.train <- asv.train[,-which(colnames(asv.train) %in% c("dates", "sample.name.x", "sample.name.y"))]
+asv.train <- asv.train[,-which(colnames(asv.train) %in% c("dates", "sample.name.x", "sample.name.y", "sample.name"))]
 
 
 # remove singletons and low abundance organisms 
@@ -157,8 +162,8 @@ summary(temp)
 hist(temp)
 asv.train <- asv.train[,-which(colSums(asv.train) < 10)]
 
-saveRDS(asv.train, "2024-02-20_asv_seq_df.rds")
-saveRDS(asv.dates,  "2024-02-20_sccoos_community_time_series_dates.rds")
+saveRDS(asv.train, "2024-07-24_asv_seq_df_18S.rds")
+saveRDS(asv.dates,  "2024-07-24_sccoos_community_time_series_dates.rds")
 
 
 
@@ -196,17 +201,20 @@ asv.train <- asv.train/rowSums(asv.train)
 
 # ---- rclr or hellinger transformation ----
 
-asv.train <- decostand(asv.train, method = "rclr")
-asv18S.rclr <- decostand(asv18S, method = "rclr")
-
-asv.train <- decostand(asv.train, method = "hellinger")
+# asv.train <- decostand(asv.train, method = "rclr")
+# asv18S.rclr <- decostand(asv18S, method = "rclr")
+# 
+asv.train.hellinger <- decostand(asv.train, method = "hellinger")
+# asv18S.hellinger <- decostand(asv.train, method = "hellinger")
 
 
 # ---- save data ----
 
-saveRDS(asv.train, "2024-02-20_sccoos_com_df_hellinger_cleaned.rds")
-saveRDS(asv18S, "2024-02-20_sccoos_com_df_rclr_cleaned.rds")
+saveRDS(asv.train.hellinger, "../2024-07-24_sccoos_com_df_hellinger_cleaned.rds")
+saveRDS(asv18S.hellinger, "2024-03-25_sccoos_com_df_hellinger_cleaned_18S.rds")
 
 
+write.csv(x = asv.train, "2024-02-28_sccoos_com_df_hellinger_cleaned.csv")
+write.table(x = asv.train, "2024-02-28_sccoos_com_df_hellinger_cleaned.txt")
 
 

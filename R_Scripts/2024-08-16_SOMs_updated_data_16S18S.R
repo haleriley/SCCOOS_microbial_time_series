@@ -1,5 +1,5 @@
-# 18S SOMS for Kaycie
-# 2024-02-20
+# 16S & 18S SOMs, to use for Hg project, using existing SOMs but combining 16S and 18S
+# 2024-08-16
 # RJH
 
 
@@ -15,18 +15,20 @@ library(viridis)
 
 setwd("C://Users/haler/Documents/PhD-Bowman/SCCOOS_microbial_time_series/R_Data/")
 
-load(file = "20240322_sccoos_asv.Rdata")
+load(file = "20240511_16S_18S/20240322_sccoos_asv.Rdata")
 
-sccoos.unclean <- readRDS("2024-02-20_asv_seq_df.rds")
+# sccoos.unclean <- readRDS("20240511_16S_18S/2024-07-24_asv_seq_df.rds")
 # sccoos <- readRDS("2024-02-20_sccoos_relabund_by_seq_wide.rds") # toggle for both 16S & 18S
-# sccoos <- readRDS("2024-02-20_sccoos_com_df_hellinger_cleaned.rds") # toggle for both 16S & 18S
-# sccoos <- readRDS("2024-03-25_sccoos_com_df_hellinger_cleaned_18S.rds") # toggle for just 18S
-sccoos <- readRDS("2024-03-11_sccoos_com_df_hellinger_cleaned_18S.rds") # toggle for both 16S & 18S
+sccoos <- readRDS("2024-02-20_sccoos_com_df_hellinger_cleaned.rds") # toggle for both 16S & 18S
+# sccoos <- readRDS("20240511_16S_18S/2024-07-24_sccoos_com_df_hellinger_cleaned.rds") # toggle for just 18S
+# sccoos.og.train <- readRDS("2024-03-11_sccoos_com_df_hellinger_cleaned_18S.rds")
 
 sccoos.env <- readRDS("../../O2-Ar_time_series/R_Data/2024-02-14_sccoos_env_data_daily_mean.rds")
 sccoos.env <- data.frame(sccoos.env)
 
 sccoos.com.df <- sccoos
+
+
 
 # ---- train the SOM ----
 
@@ -122,41 +124,41 @@ sccoos$dates <- parse_date_time(rownames(sccoos), orders = "ymd")
 
 try.it <- merge(try.it, sccoos, by = "dates")
 
-k1 <- 7
-  som.cluster <- kmeans(som.events, centers = k1)
-  saveRDS(som.cluster, "2024-04-24_som_cluster_USE_THIS_ONE.rds")
-  
-  
-  # test <- data.frame(som.model$data)
+k1 <- 5
+som.cluster <- kmeans(som.events, centers = k1)
+# saveRDS(som.cluster, "2024-04-24_som_cluster_USE_THIS_ONE.rds")
 
-  som.categorization.df <- as.data.frame(cbind(c(1:length(som.cluster$cluster)), som.cluster$cluster))
-  colnames(som.categorization.df) <- c("som.model.unit.classif", "soms.mode")
 
-  # try.it$daou.cor <- c(diff(try.it$aou.corrected), NA)
+# test <- data.frame(som.model$data)
 
-  try.it2 <- merge(som.categorization.df, try.it, by = "som.model.unit.classif")
+som.categorization.df <- as.data.frame(cbind(c(1:length(som.cluster$cluster)), som.cluster$cluster))
+colnames(som.categorization.df) <- c("som.model.unit.classif", "soms.mode")
 
-  try.it2$soms.mode <- factor(try.it2$soms.mode, levels = c(1:k1))
-  colnames(try.it2)[which(colnames(try.it2) == "soms.mode")] <- paste("soms.mode.k", k1, sep = "")
-  # try.it3 <- try.it3[,which(colnames(try.it3) != "som.model.unit.classif")]
+# try.it$daou.cor <- c(diff(try.it$aou.corrected), NA)
+
+try.it2 <- merge(som.categorization.df, try.it, by = "som.model.unit.classif")
+
+try.it2$soms.mode <- factor(try.it2$soms.mode, levels = c(1:k1))
+colnames(try.it2)[which(colnames(try.it2) == "soms.mode")] <- paste("soms.mode.k", k1, sep = "")
+# try.it3 <- try.it3[,which(colnames(try.it3) != "som.model.unit.classif")]
 
 ggplot(data = try.it2) +
-    geom_point(aes(x = dates, y = try.it2[,2], color = try.it2[,2])) +
-    labs(x = "Date", y = "SOMS Mode", color = "") +
-    # scale_x_datetime(date_breaks = "1 year") +
-    # ggtitle("Microbial Time Series") +
-    theme_bw() +
-    theme(legend.position = "none") +
-    theme(axis.title = element_text(size = 14, face = "bold"),
-          axis.text = element_text(size = 12),
-          legend.text = element_text(size = 12),
-          legend.title = element_text(size = 14, face = "bold"),
-          title = element_text(face = "bold"))
+  geom_point(aes(x = dates, y = try.it2[,2], color = try.it2[,2])) +
+  labs(x = "Date", y = "SOMS Mode", color = "") +
+  # scale_x_datetime(date_breaks = "1 year") +
+  # ggtitle("Microbial Time Series") +
+  theme_bw() +
+  theme(legend.position = "none") +
+  theme(axis.title = element_text(size = 14, face = "bold"),
+        axis.text = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 14, face = "bold"),
+        title = element_text(face = "bold"))
 
 
-saveRDS(try.it2, file = "2024-03-28_sccoos_SOMS_modes_k7_18S.rds")
+# saveRDS(try.it2, file = "2024-03-28_sccoos_SOMS_modes_k7_18S.rds")
 
-saveRDS(som.model, "2024-03-19_som_model_USE_THIS_ONE.rds")
+# saveRDS(som.model, "2024-03-19_som_model_USE_THIS_ONE.rds")
 
 # ---- look at top taxa in each mode ----
 
@@ -176,7 +178,7 @@ for(m in 1:k1){
   my.taxa.df <- as.data.frame(t(soms.taxa.totals[my.row.index, -1]))
   colnames(my.taxa.df) <- "sum.rel.abund"
   my.taxa.df$X <- rownames(my.taxa.df)
-
+  
   map.all <- rbind(map.bac, map.arc, map.euk)
   # taxa.all <- bind_rows(list(taxa.bac, taxa.arc, taxa.euk))
   taxa.all <- bind_rows(list(taxa.euk))

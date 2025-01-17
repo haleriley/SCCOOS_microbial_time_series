@@ -17,14 +17,14 @@ library(dplyr)
 
 setwd("C://Users/haler/Documents/PhD-Bowman/SCCOOS_microbial_time_series/R_Data/")
 
-sccoos <- readRDS("2024-02-20_sccoos_com_df_hellinger_cleaned.rds") # toggle this is wanting both 16S + 18S
+# sccoos <- readRDS("2024-02-20_sccoos_com_df_hellinger_cleaned.rds") # toggle this is wanting both 16S + 18S
 # sccoos <- readRDS("2024-02-20_asv_seq_df.rds") # toggle this is wanting both 16S + 18S
-# sccoos <- readRDS("2024-02-20_sccoos_18S.rds") # toggle this if only wanting 18S
+sccoos <- readRDS("2024-03-25_sccoos_com_df_hellinger_cleaned_18S.rds") # toggle this if only wanting 18S
 
-sccoos.env <- readRDS("../../O2-Ar_time_series/R_Data/2024-02-14_sccoos_env_data_daily_mean.rds")
-sccoos.env <- data.frame(sccoos.env)
-
-aou.df <- read.csv("../../O2-Ar_time_series/R_Data/2023-04-28_corrected_aou.csv")
+# sccoos.env <- readRDS("../../O2-Ar_time_series/R_Data/2024-02-14_sccoos_env_data_daily_mean.rds")
+# sccoos.env <- data.frame(sccoos.env)
+# 
+# aou.df <- read.csv("../../O2-Ar_time_series/R_Data/2023-04-28_corrected_aou.csv")
 
 # mode.df <- readRDS("2023-05-11_modes_aou.rds")
 
@@ -32,7 +32,9 @@ aou.df <- read.csv("../../O2-Ar_time_series/R_Data/2023-04-28_corrected_aou.csv"
 # taxa.arc <- read.csv("R_data/20230918/20230918_sccoos.archaea.taxon_map.csv")
 # taxa.euk <- read.csv("R_data/20230918/20230918_sccoos.eukarya.taxon_map.csv")
 
-load('20240220_sccoos_asv.Rdata')
+# sccoos <- readRDS("2024-04-26_ASV_abundance_data_and_BOUest.rds")
+
+load('20240322_sccoos_asv.Rdata')
 
 # R_data/20230918/20230918model.predictor.taxa <- readRDS("2023-05-25_aou_cor_RF_model_predictor_taxa.rds")
 
@@ -45,20 +47,18 @@ map.all <- rbind(map.bac, map.arc, map.euk)
 
 taxa.all <- bind_rows(list(taxa.bac, taxa.arc, taxa.euk))
 colnames(taxa.all)
-col_order <- c("X", "superkingdom", "kingdom", "supergroup", "division", "phylum", "clade", "class", "order", "family", "genus", "species", "strain", "taxon")
+col_order <- c("global_edge_num", "superkingdom", "kingdom", "supergroup", "division", "phylum", "clade", "class", "order", "family", "genus", "species", "strain", "taxon")
 taxa.all <- taxa.all[,col_order]
-colnames(taxa.all)[1] <- "global_edge_num"
+# colnames(taxa.all)[1] <- "global_edge_num"
 
 
 # ---- reformat abundance data and merge with taxonomic data ----
 
-# sccoos$sample.date <- parse_date_time(sccoos$dates, orders = "ymd") # toggle this for only 18S
-sccoos$sample.date <- parse_date_time(rownames(sccoos), orders = "ymd") # toggle this for all 16S + 18S
+sccoos$sample.date <- parse_date_time(rownames(sccoos), orders = "ymd") 
 
-sccoos <- sccoos %>% pivot_longer(cols = colnames(sccoos)[-which(colnames(sccoos) %in% c("sample.date", "dates", "sample.name"))], names_to = "X", values_to = "abundance")
+sccoos <- sccoos %>% pivot_longer(cols = colnames(sccoos)[-which(colnames(sccoos) == "sample.date")], names_to = "X", values_to = "abundance")
 
-sccoos <- sccoos %>% group_by(sample.date, X) %>% summarize_all(mean) # toggle for 16S + 18S
-# sccoos <- sccoos[,-c(1:2)] %>% group_by(sample.date, X) %>% summarize_all(mean) # toggle for 18S
+sccoos <- sccoos %>% group_by(sample.date, X) %>% summarize_all(mean) 
 
 sccoos <- merge(sccoos, map.all, by = "X")
 
@@ -69,10 +69,15 @@ sccoos <- merge(sccoos, taxa.all, by = "global_edge_num")
 
 sccoos$abundance <- as.numeric(sccoos$abundance)
 
+saveRDS(sccoos, "2024-03-25_sccoos_rel_abund_with_tax_info_long.rds")
+
 sccoos <- sccoos %>% group_by(sample.date, X) %>% summarize(abundance = sum(abundance))
 sccoos <- data.frame(sccoos)
 sccoos <- sccoos[which(is.na(sccoos$sample.date) == FALSE),]
 sccoos <- sccoos[which(sccoos$X != ""),]
+
+
+
 
 sccoos <- sccoos %>% pivot_wider(id_cols = sample.date, names_from = X, values_from = abundance)
 # something here is re-introducing NA's, but not sure what. Going to replace NAs with 0s, at least for now
@@ -88,109 +93,109 @@ rownames(sccoos) <- my.rownames # ignore warning
 my.year.colors <- c("red", "orange", "gold", "darkgreen", "blue", "purple")
 # my.mode.colors <- rainbow(6, rev=TRUE)
 
-saveRDS(sccoos, file = "2024-02-21_sccoos_relabund_by_seq_wide_all_hellinger.rds")
-saveRDS(map.all, file = "2024-02-21_map_all.rds")
-saveRDS(taxa.all, file = "2024-02-21_taxa_all.rds")
+saveRDS(sccoos, file = "2024-03-25_sccoos_relabund_by_seq_wide_all_hellinger.rds")
+saveRDS(map.all, file = "2024-03-25_map_all.rds")
+saveRDS(taxa.all, file = "2024-03-25_taxa_all.rds")
 
 
-# # ---- PCoA ordination ----
-# 
-# sccoos.mat <- as.matrix(sccoos)
-# sccoos.dist <- dist(sccoos.mat)
-# 
-# sccoos.pcoa <- cmdscale(d = sccoos.dist, k = 2)
-# # sccoos.pcoa <- prcomp(sccoos.dist, scale. = T)
-# # 
-# # biplot(sccoos.pcoa)
-# 
-# sccoos.pcoa <- data.frame(sccoos.pcoa)
-# colnames(sccoos.pcoa) <- c("Dim1", "Dim2")
-# sccoos.pcoa$sample.date <- parse_date_time(rownames(sccoos.pcoa), orders = "Ymd")
-# sccoos.pcoa$Year <- year(sccoos.pcoa$sample.date)
-# sccoos.pcoa$Month <- month(sccoos.pcoa$sample.date)
-# sccoos.pcoa$Day <- day(sccoos.pcoa$sample.date)
-# 
-# sccoos.pcoa <- merge(sccoos.pcoa, sccoos.env, by = "sample.date", all.x = TRUE, all.y = FALSE)
-# 
-# # PLOT!
-# 
-# 
-# ggplot(data = sccoos.pcoa) +
-#   geom_rect(aes(xmin = -0.9, xmax = -0.3, ymin = -0.2, ymax = 0), alpha = 0, color = "red", lwd = 2) +
-#   geom_rect(aes(xmin = -0.9, xmax = -0.05, ymin = 0.4, ymax = 1), alpha = 0, color = "blue", lwd = 2) +
-#   geom_rect(aes(xmin = 0.05, xmax = 0.2, ymin = -0.35, ymax = -0.18), alpha = 0, color = "darkgreen", lwd = 2) +
-#   geom_point(aes(x = Dim1, y = Dim2, color = factor(Year)), size = 3, alpha = 0.5) +
-#   scale_color_manual(values = my.year.colors) +
-#   # geom_path(aes(x = Dim1, y = Dim2), size = 0.5, alpha = 0.3) +
-#   labs(color = "Year") +
-#   theme_bw()
-# 
-# 
-# 
-# a <- ggplot(data = sccoos.pcoa) +
-#   # geom_point(aes(x = Dim1, y = Dim2, color = factor(Year)), size = 3) +
-#   geom_text(aes(x = Dim1, y = Dim2, label = as.character(sample.date), color = factor(Year)), size = 4) +
-#   # scale_color_viridis_c() +
-#   scale_color_manual(values = my.year.colors) +
-#   labs(color = "Year") +
-#   theme_bw()
-# ggplotly(a)
-# 
-# region1 <- sccoos.pcoa[which(sccoos.pcoa$Dim1 < -0.3 & sccoos.pcoa$Dim2 < 0),]
-# region2 <- sccoos.pcoa[which(sccoos.pcoa$Dim1 < -0.05 & sccoos.pcoa$Dim2 > 0.4),]
-# region3 <- sccoos.pcoa[which(sccoos.pcoa$Dim1 > 0.05 & sccoos.pcoa$Dim2 < -0.2),]
-# 
-# sccoos.pcoa$bloom <- NA
-# sccoos.pcoa$bloom[which(sccoos.pcoa$Dim1 < -0.3 & sccoos.pcoa$Dim2 < 0)] <- "Bloom 1"
-# sccoos.pcoa$bloom[which(sccoos.pcoa$Dim1 < -0.05 & sccoos.pcoa$Dim2 > 0.4)] <- "Bloom 2"
-# sccoos.pcoa$bloom[which(sccoos.pcoa$Dim1 > 0.05 & sccoos.pcoa$Dim2 < -0.2)] <- "Bloom 3"
-# 
-# sccoos.pcoa$date.no.year <- parse_date_time(paste(month(sccoos.pcoa$sample.date), day(sccoos.pcoa$sample.date), sep = "-"), orders = "md")
-# 
-# ggplot(data = sccoos.pcoa) +
-#   geom_point(aes(x = date.no.year, y = 1, color = bloom), size = 6, shape = "square") +
-#   scale_color_manual(values = c("red", "blue", "darkgreen")) +
-#   facet_wrap(.~Year, ncol = 1) +
-#   labs(x = "Date", y = "", color = "Bloom") +
-#   # scale_x_date(date_breaks = "2 months") +
-#   theme_bw() +
-#   theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
-# 
-# ggplot(data = sccoos.pcoa) +
-#   geom_point(aes(x = date.no.year, y = 1), size = 1) +
-#   # scale_color_manual(values = c("red", "blue", "darkgreen")) +
-#   facet_wrap(.~Year, ncol = 1) +
-#   labs(x = "Date", y = "", color = "Bloom") +
-#   # scale_x_date(date_breaks = "2 months") +
-#   theme_bw() +
-#   theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
-# 
-# 
-# # temperature
-# ggplot(data = sccoos.pcoa) +
-#   geom_point(aes(x = Dim1, y = Dim2, color = temperature.sccoos), size = 3) +
-#   scale_color_viridis_c(option = "inferno") +
-#   # scale_color_manual(values = my.year.colors) +
-#   labs(color = "WTemp [C]") +
-#   geom_rect(aes(xmin = -0.9, xmax = -0.05, ymin = 0.4, ymax = 1), alpha = 0, color = "blue", lwd = 2) +
-#   theme_bw()
-# 
-# # salinity
-# sccoos.pcoa.sal.corrected <- sccoos.pcoa[which(sccoos.pcoa$salinity > 30),]
-# ggplot(data = sccoos.pcoa.sal.corrected) +
-#   geom_point(aes(x = Dim1, y = Dim2, color = salinity), size = 3) +
-#   scale_color_viridis_c(option = "inferno") +
-#   # scale_color_manual(values = my.year.colors) +
-#   labs(color = "Salinity") +
-#   theme_bw()
-# 
-# # chlorophyll
-# ggplot(data = sccoos.pcoa) +
-#   geom_point(aes(x = Dim1, y = Dim2, color = chlorophyll), size = 3) +
-#   scale_color_viridis_c() +
-#   # scale_color_manual(values = my.year.colors) +
-#   labs(color = "Chlorophyll") +
-#   theme_bw()
+# ---- PCoA ordination ----
+
+sccoos.mat <- as.matrix(sccoos)
+sccoos.dist <- dist(sccoos.mat)
+
+sccoos.pcoa <- cmdscale(d = sccoos.dist, k = 2)
+# sccoos.pcoa <- prcomp(sccoos.dist, scale. = T)
+#
+# biplot(sccoos.pcoa)
+
+sccoos.pcoa <- data.frame(sccoos.pcoa)
+colnames(sccoos.pcoa) <- c("Dim1", "Dim2")
+sccoos.pcoa$sample.date <- parse_date_time(rownames(sccoos.pcoa), orders = "Ymd")
+sccoos.pcoa$Year <- year(sccoos.pcoa$sample.date)
+sccoos.pcoa$Month <- month(sccoos.pcoa$sample.date)
+sccoos.pcoa$Day <- day(sccoos.pcoa$sample.date)
+
+sccoos.pcoa <- merge(sccoos.pcoa, sccoos.env, by = "sample.date", all.x = TRUE, all.y = FALSE)
+
+# PLOT!
+
+
+ggplot(data = sccoos.pcoa) +
+  # geom_rect(aes(xmin = -0.9, xmax = -0.3, ymin = -0.2, ymax = 0), alpha = 0, color = "red", lwd = 2) +
+  # geom_rect(aes(xmin = -0.9, xmax = -0.05, ymin = 0.4, ymax = 1), alpha = 0, color = "blue", lwd = 2) +
+  # geom_rect(aes(xmin = 0.05, xmax = 0.2, ymin = -0.35, ymax = -0.18), alpha = 0, color = "darkgreen", lwd = 2) +
+  geom_point(aes(x = Dim1, y = Dim2, color = factor(Year)), size = 3, alpha = 0.5) +
+  scale_color_manual(values = my.year.colors) +
+  # geom_path(aes(x = Dim1, y = Dim2), size = 0.5, alpha = 0.3) +
+  labs(color = "Year") +
+  theme_bw()
+
+
+
+a <- ggplot(data = sccoos.pcoa) +
+  # geom_point(aes(x = Dim1, y = Dim2, color = factor(Year)), size = 3) +
+  geom_text(aes(x = Dim1, y = Dim2, label = as.character(sample.date), color = factor(Year)), size = 4) +
+  # scale_color_viridis_c() +
+  scale_color_manual(values = my.year.colors) +
+  labs(color = "Year") +
+  theme_bw()
+ggplotly(a)
+
+region1 <- sccoos.pcoa[which(sccoos.pcoa$Dim1 < -0.3 & sccoos.pcoa$Dim2 < 0),]
+region2 <- sccoos.pcoa[which(sccoos.pcoa$Dim1 < -0.05 & sccoos.pcoa$Dim2 > 0.4),]
+region3 <- sccoos.pcoa[which(sccoos.pcoa$Dim1 > 0.05 & sccoos.pcoa$Dim2 < -0.2),]
+
+sccoos.pcoa$bloom <- NA
+sccoos.pcoa$bloom[which(sccoos.pcoa$Dim1 < -0.3 & sccoos.pcoa$Dim2 < 0)] <- "Bloom 1"
+sccoos.pcoa$bloom[which(sccoos.pcoa$Dim1 < -0.05 & sccoos.pcoa$Dim2 > 0.4)] <- "Bloom 2"
+sccoos.pcoa$bloom[which(sccoos.pcoa$Dim1 > 0.05 & sccoos.pcoa$Dim2 < -0.2)] <- "Bloom 3"
+
+sccoos.pcoa$date.no.year <- parse_date_time(paste(month(sccoos.pcoa$sample.date), day(sccoos.pcoa$sample.date), sep = "-"), orders = "md")
+
+ggplot(data = sccoos.pcoa) +
+  geom_point(aes(x = date.no.year, y = 1, color = bloom), size = 6, shape = "square") +
+  scale_color_manual(values = c("red", "blue", "darkgreen")) +
+  facet_wrap(.~Year, ncol = 1) +
+  labs(x = "Date", y = "", color = "Bloom") +
+  # scale_x_date(date_breaks = "2 months") +
+  theme_bw() +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+ggplot(data = sccoos.pcoa) +
+  geom_point(aes(x = date.no.year, y = 1), size = 1) +
+  # scale_color_manual(values = c("red", "blue", "darkgreen")) +
+  facet_wrap(.~Year, ncol = 1) +
+  labs(x = "Date", y = "", color = "Bloom") +
+  # scale_x_date(date_breaks = "2 months") +
+  theme_bw() +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+
+# temperature
+ggplot(data = sccoos.pcoa) +
+  geom_point(aes(x = Dim1, y = Dim2, color = temperature.sccoos), size = 3) +
+  scale_color_viridis_c(option = "inferno") +
+  # scale_color_manual(values = my.year.colors) +
+  labs(color = "WTemp [C]") +
+  geom_rect(aes(xmin = -0.9, xmax = -0.05, ymin = 0.4, ymax = 1), alpha = 0, color = "blue", lwd = 2) +
+  theme_bw()
+
+# salinity
+sccoos.pcoa.sal.corrected <- sccoos.pcoa[which(sccoos.pcoa$salinity > 30),]
+ggplot(data = sccoos.pcoa.sal.corrected) +
+  geom_point(aes(x = Dim1, y = Dim2, color = salinity), size = 3) +
+  scale_color_viridis_c(option = "inferno") +
+  # scale_color_manual(values = my.year.colors) +
+  labs(color = "Salinity") +
+  theme_bw()
+
+# chlorophyll
+ggplot(data = sccoos.pcoa) +
+  geom_point(aes(x = Dim1, y = Dim2, color = chlorophyll), size = 3) +
+  scale_color_viridis_c() +
+  # scale_color_manual(values = my.year.colors) +
+  labs(color = "Chlorophyll") +
+  theme_bw()
 
 # ---- NMDS ordination ----
 
